@@ -1,25 +1,9 @@
-# -*- coding: utf-8 -*-
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.keys import Keys
-from bs4 import BeautifulSoup
-import time
-import pandas as pd
-import urllib.request as ur
-from bs4 import BeautifulSoup
-import warnings
-
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from time import sleep
 from lxml import html
-import lxml
 import numpy as np
 import pandas as pd
-
-# Begin yahoo_income_statement(ticker)
-# =============================================================================
-
 
 def get_income_statement(ticker):
     # file path access local html
@@ -67,15 +51,6 @@ def get_income_statement(ticker):
 
     return df
 
-
-# End yahoo_income_statement(ticker)
-# =============================================================================
-
-
-# Begin yahoo_balance_sheet(ticker):
-# =============================================================================
-
-
 def get_balance_sheet(ticker):
     # file path access local html
     filename1 = r'D:\ahmad\python\web\INDF.JK.html'
@@ -121,15 +96,6 @@ def get_balance_sheet(ticker):
     df = pd.DataFrame(parsed_rows)
 
     return df
-
-
-# End yahoo_balance_sheet(ticker):
-# =============================================================================
-
-
-# Begin yahoo_cash_flow(ticker)
-# =============================================================================
-
 
 def get_cash_flow(ticker):
     # file path access local html
@@ -199,6 +165,3 @@ def get_units(ticker):
         units = units_list[3]
 
     return units, currency
-
-# End yahoo_cash_flow(ticker)
-# =============================================================================
