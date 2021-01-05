@@ -7,6 +7,7 @@ class AlpacaBot(object):
 
     def __init__(self):
         self.stock = {
+            'PREVIOUS_EMA12': None,
             'EMA12': None,
             'EMA26': None,
             'EMA50': None,
@@ -14,9 +15,24 @@ class AlpacaBot(object):
             'MACD': [],
             'SIGNAL': None
         }
-        self.main()
 
-    def main(self):
+        self.Closing_Levels = []
+        self.Period_5ROC = []
+        self.Period_15ROC = []
+        self.Period_25ROC = []
+        self.Sum_ROC = []
+
+        self.ROC_TABLE = {
+            'CLOSE': self.Closing_Levels,
+            '5_PERIOD_ROC': self.Period_5ROC,
+            '15_PERIOD_ROC': self.Period_15ROC,
+            '25_PERIOD_ROC': self.Period_25ROC,
+            'SUM_ROC': self.Sum_ROC,
+        }
+
+        self.tripleMomentum()
+
+    def divergence(self):
         key = "PKDMJ3EFG7K6RBAQNPT3"
         sec = "gogIZwlzCnbkBbxcdBWPdiUxrrRJDyoPNR88GO4K"
 
@@ -58,13 +74,16 @@ class AlpacaBot(object):
                 MA100 = (stock.df.__getattr__(ticker).close.tail(99).sum() + current_price) / 100
                 MA200 = (stock.df.__getattr__(ticker).close.tail(199).sum() + current_price) / 200
 
+
+
                 if (self.stock['EMA12'] == None):
                     self.stock['EMA12'] = current_price * (2 / (1 + 12)) + (stock.df.__getattr__(ticker).close.tail(12).sum() / 12) * (1 - (2 / (1 + 12)))
                     self.stock['EMA26'] = current_price * (2 / (1 + 26)) + (stock.df.__getattr__(ticker).close.tail(26).sum() / 26) * (1 - (2 / (1 + 26)))
                     self.stock['EMA50'] = current_price * (2 / (1 + 50)) + (stock.df.__getattr__(ticker).close.tail(50).sum() / 50) * (1 - (2 / (1 + 50)))
                     self.stock['EMA200'] = current_price * (2 / (1 + 200)) + (stock.df.__getattr__(ticker).close.tail(200).sum() / 200) * (1 - (2 / (1 + 200)))
                 else:
-                    self.stock['EMA12'] = current_price * (2 / (1 + 12)) + (self.stock['EMA12']) * (1 - (2 / (1 + 12)))
+                    self.stock['PREVIOUS_EMA12'] = self.stock['EMA12']
+                    self.stock['EMA12'] = current_price * (2 / (1 + 12)) + (self.stock['PREVIOUS_EMA12']) * (1 - (2 / (1 + 12)))
                     self.stock['EMA26'] = current_price * (2 / (1 + 26)) + (self.stock['EMA26']) * (1 - (2 / (1 + 26)))
                     self.stock['EMA50'] = current_price * (2 / (1 + 50)) + (self.stock['EMA50']) * (1 - (2 / (1 + 50)))
                     self.stock['EMA200'] = current_price * (2 / (1 + 200)) + (self.stock['EMA200']) * (1 - (2 / (1 + 200)))
@@ -134,11 +153,58 @@ class AlpacaBot(object):
                         api.submit_order(ticker, 1, 'buy', 'market', 'day')
                         print(ticker + ' buy')
                     try:
-                        if (self.stock['MACD'][8] < self.stock['SIGNAL'] and self.stock['MACD'][7] > self.stock['SIGNAL'] and int(api.get_position(ticker).qty) > 0):
+                        if (self.stock['MACD'][8] < self.stock['SIGNAL'] and self.stock['EMA12'] - self.stock['PREVIOUS_EMA12'] <= 0 and int(api.get_position(ticker).qty) > 0):
                             qty = int(api.get_position(ticker).qty)
                             api.submit_order(ticker, qty, 'sell', 'market', 'day')
                             print(ticker + ' sell')
                     except:
                         pass
+
+    def tripleMomentum(self):
+        key = "PKDMJ3EFG7K6RBAQNPT3"
+        sec = "gogIZwlzCnbkBbxcdBWPdiUxrrRJDyoPNR88GO4K"
+
+        #API endpoint URL
+        url = "https://paper-api.alpaca.markets"
+
+        #api_version v2 refers to the version that we'll use
+        #very important for the documentation
+        api = tradeapi.REST(key, sec, url, api_version='v2')
+
+        #Init our account var
+        account = api.get_account()
+
+        #sp500_list = si.tickers_sp500()
+        sp500_list = ['TSLA']
+
+        while True:
+            for i in range(len(sp500_list)):
+                ticker = sp500_list[i]
+                stock = api.get_barset(ticker, '1Min', limit=26)
+
+                current_price = api.get_last_trade(ticker).price
+                closing_levels = stock.df.__getattr__(ticker).close.to_numpy()
+
+                self.Closing_Levels.append(closing_levels[25])
+                self.Period_25ROC.append((closing_levels[25] - closing_levels[0]) / closing_levels[0])
+                self.Period_15ROC.append((closing_levels[25] - closing_levels[10]) / closing_levels[0])
+                self.Period_5ROC.append((closing_levels[25] - closing_levels[20]) / closing_levels[0])
+                self.Sum_ROC.append(self.Period_25ROC[-1] + self.Period_15ROC[-1] + self.Period_5ROC[-1])
+
+                if (len(self.Sum_ROC) > 26):
+                    self.Closing_Levels.pop(0)
+                    self.Period_5ROC.pop(0)
+                    self.Period_15ROC.pop(0)
+                    self.Period_25ROC.pop(0)
+                    self.Sum_ROC.pop(0)
+
+                if (len(self.Sum_ROC) == 26):
+                    if (self.Sum_ROC[25] > 0.04 and self.Sum_ROC[24] < 0.04):
+                        api.submit_order(ticker, 1, 'buy', 'market', 'day')
+                        print(ticker + ' buy')
+                    elif (self.Sum_ROC[25] < 0.04 and self.Sum_ROC[24] > 0.04 and int(api.get_position(ticker).qty) > 0):
+                        qty = int(api.get_position(ticker).qty)
+                        api.submit_order(ticker, qty, 'sell', 'market', 'day')
+                        print(ticker + ' sell')
 
 AlpacaBot()
