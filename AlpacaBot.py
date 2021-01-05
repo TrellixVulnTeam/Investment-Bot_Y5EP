@@ -1,69 +1,144 @@
 import alpaca_trade_api as tradeapi
 import yahoo_fin.stock_info as si
+import time
 
-key = "PKDMJ3EFG7K6RBAQNPT3"
-sec = "gogIZwlzCnbkBbxcdBWPdiUxrrRJDyoPNR88GO4K"
+class AlpacaBot(object):
 
-#API endpoint URL
-url = "https://paper-api.alpaca.markets"
 
-#api_version v2 refers to the version that we'll use
-#very important for the documentation
-api = tradeapi.REST(key, sec, url, api_version='v2')
+    def __init__(self):
+        self.stock = {
+            'EMA12': None,
+            'EMA26': None,
+            'EMA50': None,
+            'EMA200': None,
+            'MACD': [],
+            'SIGNAL': None
+        }
+        self.main()
 
-#Init our account var
-account = api.get_account()
+    def main(self):
+        key = "PKDMJ3EFG7K6RBAQNPT3"
+        sec = "gogIZwlzCnbkBbxcdBWPdiUxrrRJDyoPNR88GO4K"
 
-sp500_list = si.tickers_sp500()
-for ticker in sp500_list:
+        #API endpoint URL
+        url = "https://paper-api.alpaca.markets"
 
-    stock = api.get_barset(ticker, 'day', limit=500)
+        #api_version v2 refers to the version that we'll use
+        #very important for the documentation
+        api = tradeapi.REST(key, sec, url, api_version='v2')
 
-    current_price = api.get_last_trade(ticker).price
-    current_change = current_price - stock.df.__getattr__(ticker).close.iat[-1]
-    if (current_change < 0):
-        current_loss = current_change
-        current_gain = 0
-    elif (current_change > 0):
-        current_loss = 0
-        current_gain = current_change
-    else:
-        current_loss = 0
-        current_gain = 0
+        #Init our account var
+        account = api.get_account()
 
-    MA10 = (stock.df.__getattr__(ticker).close.tail(9).sum() + current_price) / 10
-    MA20 = (stock.df.__getattr__(ticker).close.tail(19).sum() + current_price) / 20
-    MA50 = (stock.df.__getattr__(ticker).close.tail(49).sum() + current_price) / 50
-    MA100 = (stock.df.__getattr__(ticker).close.tail(99).sum() + current_price) / 100
-    MA200 = (stock.df.__getattr__(ticker).close.tail(199).sum() + current_price) / 200
+        #sp500_list = si.tickers_sp500()
+        sp500_list = ['TSLA']
 
-    list = stock.df.__getattr__(ticker).close.tail(14).to_numpy()
+        while True:
+            for i in range(len(sp500_list)):
+                ticker = sp500_list[i]
+                stock = api.get_barset(ticker, '1Min', limit=200)
 
-    loser_count = 0
-    gainer_count = 0
-    losses = 0
-    gains = 0
-    for i in range(len(list) - 1):
-        if (list[i + 1] < list[i]):
-            loser_count += 1
-            losses += abs(list[i + 1] - list[i])
-        if (list[i + 1] > list[i]):
-            gainer_count += 1
-            gains += abs(list[i + 1] - list[i])
+                current_price = api.get_last_trade(ticker).price
+                current_change = current_price - stock.df.__getattr__(ticker).close.iat[-1]
+                if (current_change < 0):
+                    current_loss = current_change
+                    current_gain = 0
+                elif (current_change > 0):
+                    current_loss = 0
+                    current_gain = current_change
+                else:
+                    current_loss = 0
+                    current_gain = 0
 
-    avg_gain = gains / gainer_count
-    avg_loss = losses / loser_count
+                previous_close = stock.df.__getattr__(ticker).close.iat[-1]
+                MA10 = (stock.df.__getattr__(ticker).close.tail(9).sum() + current_price) / 10
+                MA20 = (stock.df.__getattr__(ticker).close.tail(19).sum() + current_price) / 20
+                MA21 = (stock.df.__getattr__(ticker).close.tail(20).sum()) / 20
+                MA50 = (stock.df.__getattr__(ticker).close.tail(49).sum() + current_price) / 50
+                MA100 = (stock.df.__getattr__(ticker).close.tail(99).sum() + current_price) / 100
+                MA200 = (stock.df.__getattr__(ticker).close.tail(199).sum() + current_price) / 200
 
-    rs = ((avg_gain * 13 + current_gain) / 14) / ((avg_loss * 13 + current_loss) / 14)
+                if (self.stock['EMA12'] == None):
+                    self.stock['EMA12'] = current_price * (2 / (1 + 12)) + (stock.df.__getattr__(ticker).close.tail(12).sum() / 12) * (1 - (2 / (1 + 12)))
+                    self.stock['EMA26'] = current_price * (2 / (1 + 26)) + (stock.df.__getattr__(ticker).close.tail(26).sum() / 26) * (1 - (2 / (1 + 26)))
+                    self.stock['EMA50'] = current_price * (2 / (1 + 50)) + (stock.df.__getattr__(ticker).close.tail(50).sum() / 50) * (1 - (2 / (1 + 50)))
+                    self.stock['EMA200'] = current_price * (2 / (1 + 200)) + (stock.df.__getattr__(ticker).close.tail(200).sum() / 200) * (1 - (2 / (1 + 200)))
+                else:
+                    self.stock['EMA12'] = current_price * (2 / (1 + 12)) + (self.stock['EMA12']) * (1 - (2 / (1 + 12)))
+                    self.stock['EMA26'] = current_price * (2 / (1 + 26)) + (self.stock['EMA26']) * (1 - (2 / (1 + 26)))
+                    self.stock['EMA50'] = current_price * (2 / (1 + 50)) + (self.stock['EMA50']) * (1 - (2 / (1 + 50)))
+                    self.stock['EMA200'] = current_price * (2 / (1 + 200)) + (self.stock['EMA200']) * (1 - (2 / (1 + 200)))
 
-    rsi = 100 - (100 / (1 + rs))
+                MACD = self.stock['EMA12'] - self.stock['EMA26']
+                self.stock['MACD'].append(MACD)
 
-    #Reversals Method
-    if ((current_price - MA10) > 0 and ((current_price - MA10) / current_price) < 0.01 and rsi < 40):
-        #api.submit_order(ticker, 1, 'buy', 'market', 'day')
-        print(ticker)
+                if (len(self.stock['MACD']) > 9):
+                    self.stock['MACD'].pop(0)
 
-    #Momentum Method
-    if ((current_price - MA200) > 0 and ((current_price - MA200) / current_price) < 0.01 and rsi > 70):
-        #api.submit_order(ticker, 1, 'buy', 'market', 'day')
-        print(ticker)
+                if (self.stock['SIGNAL'] == None and len(self.stock['MACD']) == 9):
+                    sum = 0
+                    for i in range(9):
+                        sum += self.stock['MACD'][i]
+                    SMA = sum / 9
+                    self.stock['SIGNAL'] = MACD * (2 / (1 + 9)) + (SMA) * (1 - (2 / (1 + 9)))
+                elif (self.stock['SIGNAL'] != None):
+                    self.stock['SIGNAL'] = MACD * (2 / (1 + 9)) + (self.stock['SIGNAL']) * (1 - (2 / (1 + 9)))
+
+                list = stock.df.__getattr__(ticker).close.tail(14).to_numpy()
+
+                loser_count = 0
+                gainer_count = 0
+                losses = 0
+                gains = 0
+                for i in range(len(list) - 1):
+                    if (list[i + 1] < list[i]):
+                        loser_count += 1
+                        losses += abs(list[i + 1] - list[i])
+                    if (list[i + 1] > list[i]):
+                        gainer_count += 1
+                        gains += abs(list[i + 1] - list[i])
+
+                if (gainer_count > 0):
+                    avg_gain = gains / gainer_count
+                else:
+                    avg_gain = 0
+                if (loser_count > 0):
+                    avg_loss = losses / loser_count
+                else:
+                    avg_loss = 0
+
+                rs = ((avg_gain * 13 + current_gain) / 14) / ((avg_loss * 13 + current_loss) / 14)
+                rsi = 100 - (100 / (1 + rs))
+                '''
+                #Reversals Method
+                if (current_price > MA10 and previous_close < MA10 and rsi < 40):
+                    #api.submit_order(ticker, 1, 'buy', 'market', 'day')
+                    pass
+
+                #Momentum Method
+                if (MA20 > MA200 and MA21 < MA200 and rsi > 70):
+                    api.submit_order(ticker, 1, 'buy', 'market', 'day')
+                    print(ticker + ' buy')
+                try:
+                    if (MA20 < MA200 and MA21 > MA200 and int(api.get_position(ticker).qty) > 0):
+                        qty = int(api.get_position(ticker).qty)
+                        api.submit_order(ticker, qty, 'sell', 'market', 'day')
+                        print(ticker + ' sell')
+                except:
+                    pass
+                '''
+
+                # Divergence Method
+                if (self.stock['SIGNAL'] != None):
+                    if (self.stock['MACD'][8] > self.stock['SIGNAL'] and self.stock['MACD'][7] < self.stock['SIGNAL'] and int(api.get_position(ticker).qty) == 0):
+                        api.submit_order(ticker, 1, 'buy', 'market', 'day')
+                        print(ticker + ' buy')
+                    try:
+                        if (self.stock['MACD'][8] < self.stock['SIGNAL'] and self.stock['MACD'][7] > self.stock['SIGNAL'] and int(api.get_position(ticker).qty) > 0):
+                            qty = int(api.get_position(ticker).qty)
+                            api.submit_order(ticker, qty, 'sell', 'market', 'day')
+                            print(ticker + ' sell')
+                    except:
+                        pass
+
+AlpacaBot()
