@@ -6,6 +6,8 @@ class AlpacaBot(object):
 
 
     def __init__(self):
+        self.stocks = []
+
         self.stock = {
             'PREVIOUS_EMA12': None,
             'EMA12': None,
@@ -29,8 +31,37 @@ class AlpacaBot(object):
             '25_PERIOD_ROC': self.Period_25ROC,
             'SUM_ROC': self.Sum_ROC,
         }
-
+        self.setup()
         self.tripleMomentum()
+
+    def setup(self):
+        key = "PKDMJ3EFG7K6RBAQNPT3"
+        sec = "gogIZwlzCnbkBbxcdBWPdiUxrrRJDyoPNR88GO4K"
+
+        # API endpoint URL
+        url = "https://paper-api.alpaca.markets"
+
+        # api_version v2 refers to the version that we'll use
+        # very important for the documentation
+        api = tradeapi.REST(key, sec, url, api_version='v2')
+
+        # Init our account var
+        account = api.get_account()
+
+        # sp500_list = si.tickers_sp500()
+        sp500_list = si.tickers_sp500()
+
+        for i in range(len(sp500_list)):
+            if (i % 10 == 0):
+                dict = {
+                    'ticker': sp500_list[i],
+                    'closing_levels': [],
+                    'period_5roc': [],
+                    'period_15roc': [],
+                    'period_25roc': [],
+                    'sum_roc': []
+                }
+                self.stocks.append(dict)
 
     def divergence(self):
         key = "PKDMJ3EFG7K6RBAQNPT3"
@@ -46,8 +77,7 @@ class AlpacaBot(object):
         #Init our account var
         account = api.get_account()
 
-        #sp500_list = si.tickers_sp500()
-        sp500_list = ['TSLA']
+        sp500_list = si.tickers_sp500()
 
         while True:
             for i in range(len(sp500_list)):
@@ -175,36 +205,41 @@ class AlpacaBot(object):
         account = api.get_account()
 
         #sp500_list = si.tickers_sp500()
-        sp500_list = ['TSLA']
+        sp500_list = si.tickers_sp500()
 
         while True:
-            for i in range(len(sp500_list)):
+            for i in range(len(self.stocks)):
                 ticker = sp500_list[i]
                 stock = api.get_barset(ticker, '1Min', limit=26)
 
-                current_price = api.get_last_trade(ticker).price
                 closing_levels = stock.df.__getattr__(ticker).close.to_numpy()
 
-                self.Closing_Levels.append(closing_levels[25])
-                self.Period_25ROC.append((closing_levels[25] - closing_levels[0]) / closing_levels[0])
-                self.Period_15ROC.append((closing_levels[25] - closing_levels[10]) / closing_levels[0])
-                self.Period_5ROC.append((closing_levels[25] - closing_levels[20]) / closing_levels[0])
-                self.Sum_ROC.append(self.Period_25ROC[-1] + self.Period_15ROC[-1] + self.Period_5ROC[-1])
+                self.stocks[i]['closing_levels'].append(closing_levels[25])
+                self.stocks[i]['period_25roc'].append((closing_levels[25] - closing_levels[0]) / closing_levels[0])
+                self.stocks[i]['period_15roc'].append((closing_levels[25] - closing_levels[10]) / closing_levels[0])
+                self.stocks[i]['period_5roc'].append((closing_levels[25] - closing_levels[20]) / closing_levels[0])
+                self.stocks[i]['sum_roc'].append(self.stocks[i]['period_25roc'][-1] + self.stocks[i]['period_15roc'][-1] + self.stocks[i]['period_5roc'][-1])
 
-                if (len(self.Sum_ROC) > 26):
-                    self.Closing_Levels.pop(0)
-                    self.Period_5ROC.pop(0)
-                    self.Period_15ROC.pop(0)
-                    self.Period_25ROC.pop(0)
-                    self.Sum_ROC.pop(0)
+                if (len(self.Sum_ROC) > 2):
+                    self.stocks[i]['closing_levels'].pop(0)
+                    self.stocks[i]['period_25roc'].pop(0)
+                    self.stocks[i]['period_15roc'].pop(0)
+                    self.stocks[i]['period_5roc'].pop(0)
+                    self.stocks[i]['sum_roc'].pop(0)
 
-                if (len(self.Sum_ROC) == 26):
-                    if (self.Sum_ROC[25] > 0.04 and self.Sum_ROC[24] < 0.04):
-                        api.submit_order(ticker, 1, 'buy', 'market', 'day')
-                        print(ticker + ' buy')
-                    elif (self.Sum_ROC[25] < 0.04 and self.Sum_ROC[24] > 0.04 and int(api.get_position(ticker).qty) > 0):
-                        qty = int(api.get_position(ticker).qty)
-                        api.submit_order(ticker, qty, 'sell', 'market', 'day')
-                        print(ticker + ' sell')
+                if (len(self.stocks[i]['sum_roc']) == 2):
+                    try:
+                        if (self.stocks[i]['sum_roc'][1] > 0.04 and self.stocks[i]['sum_roc'][0] < 0.04):
+                            api.submit_order(ticker, 1, 'buy', 'market', 'day')
+                            print(ticker + ' buy')
+                        elif (self.stocks[i]['sum_roc'][1] < 0.04 and self.stocks[i]['sum_roc'][0] > 0.04 and int(api.get_position(ticker).qty) > 0):
+                            qty = int(api.get_position(ticker).qty)
+                            api.submit_order(ticker, qty, 'sell', 'market', 'day')
+                            print(ticker + ' sell')
+                    except:
+                        pass
+
+                    print(self.stocks[i]['sum_roc'])
+            time.sleep(55)
 
 AlpacaBot()
