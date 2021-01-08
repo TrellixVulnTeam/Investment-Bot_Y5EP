@@ -220,7 +220,7 @@ class AlpacaBot(object):
                 self.stocks[i]['period_5roc'].append((closing_levels[25] - closing_levels[20]) / closing_levels[0])
                 self.stocks[i]['sum_roc'].append(self.stocks[i]['period_25roc'][-1] + self.stocks[i]['period_15roc'][-1] + self.stocks[i]['period_5roc'][-1])
 
-                if (len(self.Sum_ROC) > 2):
+                if (len(self.stocks[i]['sum_roc']) > 2):
                     self.stocks[i]['closing_levels'].pop(0)
                     self.stocks[i]['period_25roc'].pop(0)
                     self.stocks[i]['period_15roc'].pop(0)
@@ -229,17 +229,16 @@ class AlpacaBot(object):
 
                 if (len(self.stocks[i]['sum_roc']) == 2):
                     try:
-                        if (self.stocks[i]['sum_roc'][1] > 0.04 and self.stocks[i]['sum_roc'][0] < 0.04):
+                        if (self.stocks[i]['sum_roc'][1] > 0.001 and self.stocks[i]['sum_roc'][0] < 0.0001):
                             api.submit_order(ticker, 1, 'buy', 'market', 'day')
                             print(ticker + ' buy')
-                        elif (self.stocks[i]['sum_roc'][1] < 0.04 and self.stocks[i]['sum_roc'][0] > 0.04 and int(api.get_position(ticker).qty) > 0):
+                        elif (self.stocks[i]['sum_roc'][1] < 0.0001 and self.stocks[i]['sum_roc'][0] > 0.0001 and int(api.get_position(ticker).qty) > 0):
                             qty = int(api.get_position(ticker).qty)
                             api.submit_order(ticker, qty, 'sell', 'market', 'day')
                             print(ticker + ' sell')
                     except:
                         pass
-
-                    print(self.stocks[i]['sum_roc'])
+            print('sleeping...')
             time.sleep(55)
 
 AlpacaBot()
