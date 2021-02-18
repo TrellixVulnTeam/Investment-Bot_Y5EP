@@ -7,29 +7,33 @@ import statsmodels.api as sm
 import YahooFinance as yf
 
 class MarketData(object):
-
-    def __init__(self, analyze):
+    def __init__(self, analyze):   
+        # initialize connection to the database
         username = "fluse9"
-        password = "allegoryofthecave1"
+        password = "**********"
         dbname = "StockData"
         colname = "Financials"
         host = "mongodb+srv://" + username + ":" + password + "@investmentdata.z4aov.mongodb.net/" + dbname + "?retryWrites=true&w=majority"
         self.col = Databases.MongoConnection(host, dbname, colname).collection
 
+        # Retrieve data 
         if (analyze == False):
             self.main()
             self.logData()
             self.getFinancials()
 
+        # Analyze data
         elif (analyze == True):
             self.runAnalytics()
 
     def main(self):
+        # Construct list of stocks to inspect
         dow_list = si.tickers_dow()
         sp500_list = si.tickers_sp500()
         nasdaq_list = si.tickers_nasdaq()
         all_tickers = sorted(list(filter(None, set(dow_list + sp500_list))))
 
+        # Collect data for each stock in the list and store in MongoDB as dataframes (Scrapes financial data from Yahoo Finance)
         for ticker in all_tickers:
             try:
                 price = si.get_live_price(ticker)
@@ -48,6 +52,7 @@ class MarketData(object):
             except:
                 pass
 
+    # Convert any numbers expressed alphanumerically to be purely numeric (i.e. 1M -> 1000000)
     def cleanData(self, num):
         num_str = str(num)
         if (num_str[-1] == 'M'):
@@ -58,6 +63,7 @@ class MarketData(object):
             new_num = float(num[:-1]) * 1000000000000
         return new_num
 
+    # Multiply financial data by necessary multiplier to express all data in terms of single dollars
     def cleanFinancials(self, num, units):
         if (units == 'thousands'):
             new_num = num * 1000
@@ -69,6 +75,7 @@ class MarketData(object):
             new_num = num * 1000000000000
         return new_num
 
+    # Calculate Free Cash Flow Valuation by discounting the last 4yr FCF growth rate over the next 10 years
     def fcf_valuation(self):
         d = 0.12
         if (self.last_4yr_fcf_growth > 0.2):
@@ -92,6 +99,7 @@ class MarketData(object):
         )
         return intrinsic_value / self.shares_outstanding
 
+    # Calculate Earnings Valuation by discounting the last 4yr earnings growth rate over the next 10 years
     def earnings_valuation(self):
         d = 0.12
         if (self.last_5yr_earnings > 0.2):
@@ -115,6 +123,7 @@ class MarketData(object):
         )
         return intrinsic_value
 
+    # Retrieves data from database and constructs a new object of relevant indicators and financial ratios for each ticker for OLS analysis
     def logData(self, ticker, price, quote_table, balance_sheet, income_statement, cash_flow, stats, valuation, analysts_info, earnings, oneyear_return):
         self.ticker = ticker
         try:
@@ -301,6 +310,7 @@ class MarketData(object):
         except:
             self.one_year_return = None
 
+    # Turns object data into a dictionary
     def getFinancials(self):
         dict = {
             "ticker": self.ticker,
@@ -349,6 +359,7 @@ class MarketData(object):
 
         return dict
 
+    # Runs an Ordinary Least Squares regression model on all of the stock data collected and returns a table summary
     def runAnalytics(self):
         stock_data = list(self.col.find())
 
@@ -374,6 +385,7 @@ class MarketData(object):
 
         return results
 
+    # Outputs an ordered ranking of the best stocks based on a holistic score of their rankings in key financial indicators
     def getMarketData(self):
         stock_data = list(self.col.find())
 
